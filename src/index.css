@@ -77,6 +77,7 @@ body {
   margin-bottom: 0.5rem;
   background: linear-gradient(to right, #60a5fa, #3b82f6);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -382,6 +383,112 @@ body {
   font-style: italic;
 }
 
+/* Active Session Banner */
+.active-session-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--success-color);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success-color);
+  display: inline-block;
+  flex-shrink: 0;
+  animation: pulse 1.5s infinite;
+}
+
+/* Sessions Table */
+.sessions-table-wrapper {
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.sessions-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sessions-table-wrapper::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.sessions-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 10px;
+}
+
+.sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.sessions-table th {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--glass-border);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+}
+
+.sessions-table td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sessions-table tr.row-open td {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.td-employee {
+  font-weight: 500;
+}
+
+.td-entrada {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.td-salida {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.td-total {
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+.badge-open {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
+  padding: 0.2rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from {
@@ -404,5 +511,19 @@ body {
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
   }
 }

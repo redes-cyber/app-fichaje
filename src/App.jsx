@@ -7,108 +7,134 @@ import { supabase } from './lib/supabase.js';
 import './index.css';
 
 function App() {
-  const [records, setRecords] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [employeeName, setEmployeeName] = useState(null);
-  const { requestLocation, loading, error: geoError } = useGeolocation();
+  const [activeSession, setActiveSession] = useState(null); // Sesión abierta actual
+  const [loading, setLoading] = useState(false);
+  const { requestLocation, loading: geoLoading, error: geoError } = useGeolocation();
 
-  // Load from local storage and Supabase on mount
   useEffect(() => {
     const savedName = localStorage.getItem('employeeName');
     if (savedName) {
       setEmployeeName(savedName);
     }
-    fetchRecords();
+    fetchSessions();
   }, []);
 
-  const fetchRecords = async () => {
+  const fetchSessions = async () => {
     try {
       const { data, error } = await supabase
-        .from('time_logs')
+        .from('work_sessions')
         .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(50); // Muestra los últimos 50 registros para no sobrecargar
+        .order('fecha', { ascending: false })
+        .order('hora_entrada', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
+      setSessions(data || []);
 
-      // Transform records to match UI expectations
-      const formattedRecords = data.map(record => ({
-        id: record.id,
-        action: record.action,
-        employeeName: record.employee_name,
-        timestamp: record.timestamp,
-        location: record.lat && record.lng ? {
-          lat: record.lat,
-          lng: record.lng,
-          accuracy: record.accuracy
-        } : null
-      }));
-
-      setRecords(formattedRecords);
+      // Verificar si hay una sesión abierta localmente
+      const openSession = localStorage.getItem('openSession');
+      if (openSession) {
+        setActiveSession(JSON.parse(openSession));
+      }
     } catch (err) {
-      console.error('Error fetching records from Supabase', err);
+      console.error('Error cargando sesiones:', err);
     }
   };
 
-  const handleAction = async (action) => {
+  const handleEntrada = async () => {
+    setLoading(true);
     try {
       const loc = await requestLocation();
-      addRecord(action, loc);
-    } catch (err) {
-      // Si la ubicación falla, podemos guardar sin ella si lo deseamos, pero aquí requerimos ubicación.
-      alert(`No se pudo obtener la ubicación para la acción: ${action}. ${err.message}`);
-      // Comentar la siguiente linea si no es obligatorio tener ubicacion para guardar el registro.
-      // addRecord(action, null); 
-    }
-  };
+      const now = new Date();
 
-  const addRecord = async (action, location) => {
-    // Generate optimistic UI record
-    const tempId = crypto.randomUUID();
-    const newRecord = {
-      id: tempId,
-      action,
-      employeeName,
-      timestamp: new Date().toISOString(),
-      location
-    };
-
-    setRecords([newRecord, ...records]);
-
-    // Insert to Supabase DB
-    try {
-      const { error } = await supabase
-        .from('time_logs')
+      const { data, error } = await supabase
+        .from('work_sessions')
         .insert([{
-          employee_name: employeeName,
-          action,
-          lat: location ? location.lat : null,
-          lng: location ? location.lng : null,
-          accuracy: location ? location.accuracy : null
-        }]);
+          empleado: employeeName,
+          accion: 'Jornada',
+          fecha: now.toISOString().split('T')[0],
+          hora_entrada: now.toISOString(),
+          session_open: true,
+          lat_entrada: loc?.lat || null,
+          lng_entrada: loc?.lng || null,
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      const session = { ...data };
+      setActiveSession(session);
+      localStorage.setItem('openSession', JSON.stringify(session));
+      fetchSessions();
     } catch (err) {
-      console.error('Error saving to Supabase', err);
-      // Opcional: mostrar un mensaje de error al usuario si la nube falla
-      alert('Error guardando en la nube. ' + err.message);
+      alert('Error al registrar entrada: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleClear = () => {
-    alert('Como Administrador, el borrado de la base de datos central debe hacerse desde el panel de control.');
+  const handleSalida = async () => {
+    setLoading(true);
+    try {
+      const loc = await requestLocation();
+      const now = new Date();
+      const currentSession = activeSession || JSON.parse(localStorage.getItem('openSession'));
+
+      if (!currentSession) {
+        alert('No hay una entrada activa registrada.');
+        setLoading(false);
+        return;
+      }
+
+      // Calcular horas totales
+      const entrada = new Date(currentSession.hora_entrada);
+      const diffMs = now - entrada;
+      const totalHoras = parseFloat((diffMs / 3600000).toFixed(2));
+
+      const { error } = await supabase
+        .from('work_sessions')
+        .update({
+          hora_salida: now.toISOString(),
+          total_horas: totalHoras,
+          session_open: false,
+          lat_salida: loc?.lat || null,
+          lng_salida: loc?.lng || null,
+        })
+        .eq('id', currentSession.id);
+
+      if (error) throw error;
+
+      setActiveSession(null);
+      localStorage.removeItem('openSession');
+      fetchSessions();
+    } catch (err) {
+      alert('Error al registrar salida: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegister = (name) => {
     setEmployeeName(name);
     localStorage.setItem('employeeName', name);
+    fetchSessions();
   };
 
   const handleChangeUser = () => {
-    if (confirm('¿Estás seguro de que quieres cambiar de usuario? Deberás registrarte de nuevo.')) {
+    if (activeSession) {
+      alert('Por favor ficha la Salida antes de cambiar de usuario.');
+      return;
+    }
+    if (confirm('¿Estás seguro de que quieres cambiar de usuario?')) {
       setEmployeeName(null);
       localStorage.removeItem('employeeName');
     }
   };
+
+  const isClockedIn = !!activeSession;
 
   return (
     <div className="app-container">
@@ -128,14 +154,16 @@ function App() {
             </div>
 
             <ClockControls
-              onAction={handleAction}
-              loading={loading}
+              onEntrada={handleEntrada}
+              onSalida={handleSalida}
+              isClockedIn={isClockedIn}
+              activeSession={activeSession}
+              loading={loading || geoLoading}
               error={geoError}
             />
 
             <HistoryLog
-              records={records}
-              onClear={handleClear}
+              sessions={sessions}
             />
           </>
         )}

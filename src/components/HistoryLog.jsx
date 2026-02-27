@@ -1,73 +1,63 @@
 import React from 'react';
 
-export function HistoryLog({ records, onClear }) {
-    if (!records || records.length === 0) {
+export function HistoryLog({ sessions }) {
+    if (!sessions || sessions.length === 0) {
         return (
             <div className="history-container empty">
-                <h3>Historial de Registros</h3>
-                <p>Aún no hay registros guardados.</p>
+                <h3>Historial de Jornadas</h3>
+                <p>Aún no hay jornadas registradas.</p>
             </div>
         );
     }
 
-    const getActionLabel = (action) => {
-        switch (action) {
-            case 'entrada': return 'Entrada';
-            case 'salida': return 'Salida';
-            case 'pausa': return 'Pausa';
-            default: return action;
-        }
+    const formatTime = (iso) => {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     };
 
-    const getActionColor = (action) => {
-        switch (action) {
-            case 'entrada': return 'text-green';
-            case 'salida': return 'text-red';
-            case 'pausa': return 'text-yellow';
-            default: return '';
-        }
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '—';
+        const d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+    };
+
+    const formatHoras = (h) => {
+        if (h === null || h === undefined) return '—';
+        const hours = Math.floor(h);
+        const mins = Math.round((h - hours) * 60);
+        return `${hours}h ${mins.toString().padStart(2, '0')}m`;
     };
 
     return (
         <div className="history-container">
             <div className="history-header">
-                <h3>Historial de Registros</h3>
-                <button className="btn-clear" onClick={onClear}>Limpiar</button>
+                <h3>Historial de Jornadas</h3>
             </div>
 
-            <ul className="history-list">
-                {records.map((record) => (
-                    <li key={record.id} className="history-item">
-                        <div className="item-main">
-                            <span className={`action-badge ${getActionColor(record.action)}`}>
-                                {getActionLabel(record.action)}
-                            </span>
-                            <span className="timestamp">
-                                {new Date(record.timestamp).toLocaleString('es-ES')}
-                            </span>
-                        </div>
-
-                        <div className="item-employee">
-                            <span className="employee-name">👤 {record.employeeName || 'Desconocido'}</span>
-                        </div>
-
-                        <div className="location-info">
-                            {record.location ? (
-                                <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${record.location.lat},${record.location.lng}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="location-link"
-                                >
-                                    📍 Ver en Mapa (Precisión: {Math.round(record.location.accuracy)}m)
-                                </a>
-                            ) : (
-                                <span className="no-location">Ubicación no disponible</span>
-                            )}
-                        </div>
-                    </li>
-                ))}
-            </ul>
+            <div className="sessions-table-wrapper">
+                <table className="sessions-table">
+                    <thead>
+                        <tr>
+                            <th>Empleado</th>
+                            <th>Fecha</th>
+                            <th>Entrada</th>
+                            <th>Salida</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sessions.map((s) => (
+                            <tr key={s.id} className={s.session_open ? 'row-open' : ''}>
+                                <td className="td-employee">👤 {s.empleado}</td>
+                                <td>{formatDate(s.fecha)}</td>
+                                <td className="td-entrada">{formatTime(s.hora_entrada)}</td>
+                                <td className="td-salida">{s.session_open ? <span className="badge-open">Activo</span> : formatTime(s.hora_salida)}</td>
+                                <td className="td-total">{s.session_open ? '—' : formatHoras(s.total_horas)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
