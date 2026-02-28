@@ -8,6 +8,9 @@ const EMPLEADAS = [
     'Zoyla Pomareda',
     'Cristina Spinola',
     'Lliuben Diaz',
+    'Gustavo Gamboa',
+    'Maria Velez',
+    'Cristina Melis',
 ];
 
 export function RegistrationForm({ onRegister }) {
