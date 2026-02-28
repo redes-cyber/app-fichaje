@@ -1,5 +1,5 @@
 // URL del Google Apps Script - receptor de fichajes
-export const SHEETS_URL = 'https://script.google.com/a/macros/limpiezabalearmallorca.es/s/AKfycbxMpr7T686XddzmLgoQFamMP-GxmhQs0NsoNpy8cXtjozq7OV5EmIJw6NnaZfD-5ZCfnA/exec';
+export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwFXluiWzQa6UssfyMyLhLmhglAs2nekW9SPM_Av18SuYh8Bi-Dcc8PHwENpOttCZAXtg/exec';
 
 /**
  * Registra una entrada en Google Sheets

@@ -1,31 +1,50 @@
 import React, { useState } from 'react';
 
+// Lista oficial de empleadas - debe coincidir EXACTAMENTE con las pestañas de Google Sheets
+const EMPLEADAS = [
+    'Aldri Garcia',
+    'Yosibel Mora',
+    'Nilmary Herrera',
+    'Zoyla Pomareda',
+    'Cristina Spinola',
+    'Lliuben Diaz',
+];
+
 export function RegistrationForm({ onRegister }) {
-    const [name, setName] = useState('');
+    const [selected, setSelected] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (name.trim()) {
-            onRegister(name.trim());
+        if (selected) {
+            onRegister(selected);
         }
     };
 
     return (
         <div className="registration-container">
-            <h2>Registro de Empleado</h2>
-            <p className="subtitle">Por favor, introduce tu nombre para comenzar a fichar.</p>
+            <div className="reg-logo">🧹</div>
+            <h2>Control Horario</h2>
+            <p className="subtitle">Selecciona tu nombre para comenzar a fichar</p>
 
             <form onSubmit={handleSubmit} className="registration-form">
-                <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej: Juan Pérez"
-                    className="input-field"
+                <select
+                    value={selected}
+                    onChange={(e) => setSelected(e.target.value)}
+                    className="input-field select-field"
                     required
-                />
-                <button type="submit" className="btn btn-primary">
-                    Registrar y Continuar
+                >
+                    <option value="" disabled>— Selecciona tu nombre —</option>
+                    {EMPLEADAS.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                    ))}
+                </select>
+
+                <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={!selected}
+                >
+                    Continuar →
                 </button>
             </form>
         </div>
