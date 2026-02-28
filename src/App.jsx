@@ -3,14 +3,15 @@ import { ClockControls } from './components/ClockControls.jsx';
 import { HistoryLog } from './components/HistoryLog.jsx';
 import { RegistrationForm } from './components/RegistrationForm.jsx';
 import { useGeolocation } from './hooks/useGeolocation.js';
-import { supabase } from './lib/supabase.js';
+import { registrarEntrada, registrarSalida, obtenerRegistros } from './lib/sheets.js';
 import './index.css';
 
 function App() {
   const [sessions, setSessions] = useState([]);
   const [employeeName, setEmployeeName] = useState(null);
-  const [activeSession, setActiveSession] = useState(null); // Sesión abierta actual
+  const [activeSession, setActiveSession] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState(null);
   const { requestLocation, loading: geoLoading, error: geoError } = useGeolocation();
 
   useEffect(() => {
@@ -18,29 +19,29 @@ function App() {
     if (savedName) {
       setEmployeeName(savedName);
     }
-    fetchSessions();
+    const openSession = localStorage.getItem('openSession');
+    if (openSession) {
+      try {
+        setActiveSession(JSON.parse(openSession));
+      } catch { }
+    }
   }, []);
 
-  const fetchSessions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('work_sessions')
-        .select('*')
-        .order('fecha', { ascending: false })
-        .order('hora_entrada', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setSessions(data || []);
-
-      // Verificar si hay una sesión abierta localmente
-      const openSession = localStorage.getItem('openSession');
-      if (openSession) {
-        setActiveSession(JSON.parse(openSession));
-      }
-    } catch (err) {
-      console.error('Error cargando sesiones:', err);
+  // Cargamos el historial al identificarse el empleado
+  useEffect(() => {
+    if (employeeName) {
+      cargarHistorial();
     }
+  }, [employeeName]);
+
+  const cargarHistorial = async () => {
+    const data = await obtenerRegistros();
+    setSessions(data);
+  };
+
+  const mostrarEstado = (msg, tipo = 'ok') => {
+    setStatusMsg({ msg, tipo });
+    setTimeout(() => setStatusMsg(null), 4000);
   };
 
   const handleEntrada = async () => {
@@ -48,29 +49,42 @@ function App() {
     try {
       const loc = await requestLocation();
       const now = new Date();
+      const fechaStr = now.toLocaleDateString('es-ES');
+      const horaStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-      const { data, error } = await supabase
-        .from('work_sessions')
-        .insert([{
-          empleado: employeeName,
-          accion: 'Jornada',
-          fecha: now.toISOString().split('T')[0],
-          hora_entrada: now.toISOString(),
-          session_open: true,
-          lat_entrada: loc?.lat || null,
-          lng_entrada: loc?.lng || null,
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const session = { ...data };
+      // Guardar sesión activa localmente
+      const session = {
+        empleado: employeeName,
+        fecha: fechaStr,
+        hora_entrada: horaStr,
+        hora_entrada_iso: now.toISOString(),
+        lat: loc?.lat,
+        lng: loc?.lng,
+      };
       setActiveSession(session);
       localStorage.setItem('openSession', JSON.stringify(session));
-      fetchSessions();
+
+      // Enviar a Google Sheets
+      await registrarEntrada({
+        empleado: employeeName,
+        fecha: fechaStr,
+        hora_entrada: horaStr,
+      });
+
+      // Añadir al historial local de forma optimística
+      setSessions(prev => [{
+        empleado: employeeName,
+        accion: 'Jornada',
+        fecha: fechaStr,
+        hora_entrada: horaStr,
+        hora_salida: '',
+        total_horas: '',
+        _open: true,
+      }, ...prev]);
+
+      mostrarEstado('✅ Entrada fichada correctamente');
     } catch (err) {
-      alert('Error al registrar entrada: ' + err.message);
+      mostrarEstado('⚠️ ' + err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -78,40 +92,44 @@ function App() {
 
   const handleSalida = async () => {
     setLoading(true);
+    const currentSession = activeSession || JSON.parse(localStorage.getItem('openSession') || 'null');
+
+    if (!currentSession) {
+      mostrarEstado('⚠️ No hay una entrada activa registrada.', 'error');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const loc = await requestLocation();
+      await requestLocation();
       const now = new Date();
-      const currentSession = activeSession || JSON.parse(localStorage.getItem('openSession'));
-
-      if (!currentSession) {
-        alert('No hay una entrada activa registrada.');
-        setLoading(false);
-        return;
-      }
-
-      // Calcular horas totales
-      const entrada = new Date(currentSession.hora_entrada);
+      const entrada = new Date(currentSession.hora_entrada_iso);
       const diffMs = now - entrada;
-      const totalHoras = parseFloat((diffMs / 3600000).toFixed(2));
+      const totalHoras = (diffMs / 3600000).toFixed(2);
+      const horaStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-      const { error } = await supabase
-        .from('work_sessions')
-        .update({
-          hora_salida: now.toISOString(),
-          total_horas: totalHoras,
-          session_open: false,
-          lat_salida: loc?.lat || null,
-          lng_salida: loc?.lng || null,
-        })
-        .eq('id', currentSession.id);
+      // Enviar a Google Sheets
+      await registrarSalida({
+        empleado: employeeName,
+        hora_salida: horaStr,
+        total_horas: totalHoras,
+      });
 
-      if (error) throw error;
+      // Actualizar historial local
+      setSessions(prev => {
+        const updated = [...prev];
+        const idx = updated.findIndex(s => s._open && s.empleado === employeeName);
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], hora_salida: horaStr, total_horas: totalHoras, _open: false };
+        }
+        return updated;
+      });
 
       setActiveSession(null);
       localStorage.removeItem('openSession');
-      fetchSessions();
+      mostrarEstado('🔴 Salida fichada. Total: ' + totalHoras + ' horas');
     } catch (err) {
-      alert('Error al registrar salida: ' + err.message);
+      mostrarEstado('⚠️ ' + err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -120,7 +138,6 @@ function App() {
   const handleRegister = (name) => {
     setEmployeeName(name);
     localStorage.setItem('employeeName', name);
-    fetchSessions();
   };
 
   const handleChangeUser = () => {
@@ -128,8 +145,9 @@ function App() {
       alert('Por favor ficha la Salida antes de cambiar de usuario.');
       return;
     }
-    if (confirm('¿Estás seguro de que quieres cambiar de usuario?')) {
+    if (confirm('¿Cambiar de usuario?')) {
       setEmployeeName(null);
+      setSessions([]);
       localStorage.removeItem('employeeName');
     }
   };
@@ -153,6 +171,12 @@ function App() {
               <button className="btn-text" onClick={handleChangeUser}>Cambiar usuario</button>
             </div>
 
+            {statusMsg && (
+              <div className={`status-msg ${statusMsg.tipo === 'error' ? 'status-error' : 'status-ok'}`}>
+                {statusMsg.msg}
+              </div>
+            )}
+
             <ClockControls
               onEntrada={handleEntrada}
               onSalida={handleSalida}
@@ -162,9 +186,7 @@ function App() {
               error={geoError}
             />
 
-            <HistoryLog
-              sessions={sessions}
-            />
+            <HistoryLog sessions={sessions} onRefresh={cargarHistorial} />
           </>
         )}
       </div>
