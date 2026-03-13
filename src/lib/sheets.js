@@ -2,6 +2,24 @@
 export const SHEETS_URL = 'https://script.google.com/a/macros/limpiezabalearmallorca.es/s/AKfycbxMpr7T686XddzmLgoQFamMP-GxmhQs0NsoNpy8cXtjozq7OV5EmIJw6NnaZfD-5ZCfnA/exec';
 
 /**
+ * Crea una hoja individual para el usuario si no existe
+ */
+export async function registrarUsuario(nombre) {
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ tipo: 'registro', empleado: nombre }),
+        });
+        return true;
+    } catch (err) {
+        console.error('Error al registrar usuario:', err);
+        return false;
+    }
+}
+
+/**
  * Registra una entrada en Google Sheets
  */
 export async function registrarEntrada({ empleado, fecha, hora_entrada, lat, lng }) {

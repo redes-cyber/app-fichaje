@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { Mail, Loader2, User } from 'lucide-react';
+import { registrarUsuario } from '../lib/sheets';
 
 export function Auth({ onLogin }) {
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState('');
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         if (!name.trim()) return;
         setLoading(true);
 
-        // Con Google Sheets usamos el nombre o email como identificador único
-        setTimeout(() => {
-            onLogin(name);
-            setLoading(false);
-        }, 800);
+        // Con Google Sheets creamos o usamos la hoja individual del usuario
+        await registrarUsuario(name);
+
+        onLogin(name);
+        setLoading(false);
     };
 
     return (
