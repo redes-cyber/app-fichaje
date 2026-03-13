@@ -1,83 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { User, Mail, Briefcase, LogOut } from 'lucide-react';
+import React from 'react';
+import { User, Mail, LogOut, ShieldCheck } from 'lucide-react';
 
-export function Profile({ session }) {
-    const [profile, setProfile] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchProfile();
-    }, [session]);
-
-    const fetchProfile = async () => {
-        try {
-            setLoading(true);
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-
-            if (error && error.code !== 'PGRST116') throw error;
-            setProfile(data || {
-                full_name: session.user.user_metadata?.full_name || 'Usuario',
-                email: session.user.email,
-                role: 'user'
-            });
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSignOut = async () => {
-        await supabase.auth.signOut();
-    };
-
-    if (loading) return <div className="loading-state">Cargando perfil...</div>;
+export function Profile({ session, onLogout }) {
+    const { email, user_metadata } = session.user;
+    const fullName = user_metadata?.full_name || email;
 
     return (
         <div className="tab-pane">
-            <div className="glass-panel profile-panel">
+            <div className="glass-panel profile-card">
                 <div className="profile-header">
-                    <div className="avatar-circle">
-                        <User size={40} />
+                    <div className="profile-avatar">
+                        {fullName.charAt(0).toUpperCase()}
                     </div>
-                    <h2>Mi Perfil</h2>
+                    <h2 className="profile-name">{fullName}</h2>
+                    <div className="profile-badge">
+                        <ShieldCheck size={14} />
+                        {email === 'limpiezabalear@gmail.com' ? 'Administrador' : 'Empleado'}
+                    </div>
                 </div>
 
                 <div className="profile-info">
-                    <div className="info-group">
-                        <div className="info-icon"><User size={20} /></div>
-                        <div className="info-content">
-                            <label>Nombre Completo</label>
-                            <div className="info-value">{profile?.full_name}</div>
-                        </div>
-                    </div>
-
-                    <div className="info-group">
-                        <div className="info-icon"><Mail size={20} /></div>
+                    <div className="info-item">
+                        <Mail className="info-icon" size={20} />
                         <div className="info-content">
                             <label>Correo Electrónico</label>
-                            <div className="info-value">{session.user.email}</div>
+                            <p>{email}</p>
                         </div>
                     </div>
-
-                    <div className="info-group">
-                        <div className="info-icon"><Briefcase size={20} /></div>
+                    <div className="info-item">
+                        <User className="info-icon" size={20} />
                         <div className="info-content">
-                            <label>Cargo / Rol</label>
-                            <div className="info-value capitalize">{profile?.role === 'admin' ? 'Administrador' : 'Empleado'}</div>
+                            <label>ID de Empleado</label>
+                            <p>{email}</p>
                         </div>
                     </div>
                 </div>
 
-                <button onClick={handleSignOut} className="btn btn-logout mt-8">
+                <button onClick={onLogout} className="logout-btn">
                     <LogOut size={20} />
                     Cerrar Sesión
                 </button>
+            </div>
+
+            <div className="glass-panel mt-4">
+                <h3 className="subsection-title">Información de la App</h3>
+                <p className="text-sm text-gray-600 mb-2">
+                    Versión: 2.1.0 (Google Sheets Edition)
+                </p>
+                <p className="text-xs text-gray-500">
+                    Esta aplicación utiliza Google Sheets para el almacenamiento de datos, lo que garantiza que no se necesiten configuraciones complejas de base de datos.
+                </p>
             </div>
         </div>
     );

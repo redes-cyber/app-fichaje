@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { enviarAシート, obtenerRegistros } from '../lib/sheets';
 import { FileSignature, Send, Loader2, Printer, Eraser } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 
@@ -14,22 +14,17 @@ export function WorkConfirmations({ session }) {
     const [msg, setMsg] = useState(null);
 
     const sigCanvas = useRef({});
+    const empleado = session.user.email;
 
     useEffect(() => {
         fetchConformes();
-    }, [session]);
+    }, [empleado]);
 
     const fetchConformes = async () => {
         try {
             setFetching(true);
-            const { data, error } = await supabase
-                .from('conformes')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setConformes(data || []);
+            const data = await obtenerRegistros(empleado);
+            setConformes(data.filter(c => c.tipo === 'conforme') || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -54,23 +49,20 @@ export function WorkConfirmations({ session }) {
         }
 
         try {
-            // Cambiamos getTrimmedCanvas() por toDataURL() directamente 
-            // ya que getTrimmedCanvas() requiere mucho procesamiento y puede colgar la página
+            // Usamos toDataURL() para mayor velocidad
             const signatureURL = sigCanvas.current.toDataURL('image/png');
 
-            const { error } = await supabase.from('conformes').insert([
-                {
-                    user_id: session.user.id,
-                    client_name: clientName,
-                    date: date,
-                    description: description,
-                    signature: signatureURL
-                }
-            ]);
+            await enviarAシート({
+                tipo: 'conforme',
+                empleado,
+                client_name: clientName,
+                date: date,
+                description: description,
+                signature: signatureURL,
+                created_at: new Date().toISOString()
+            });
 
-            if (error) throw error;
-
-            setMsg('Conforme de trabajo guardado correctamente.');
+            setMsg('Conforme de trabajo guardado correctamente en Google Sheets.');
             setClientName('');
             setDescription('');
             clearSignature();
@@ -84,10 +76,7 @@ export function WorkConfirmations({ session }) {
     };
 
     const handePrint = (conforme) => {
-        // Open a new window for printing the ticket
         const printWindow = window.open('', '_blank');
-
-        // Construct the ticket HTML
         printWindow.document.write(`
       <html>
         <head>
@@ -96,7 +85,6 @@ export function WorkConfirmations({ session }) {
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; }
             .ticket { border: 1px solid #ddd; padding: 30px; border-radius: 8px; max-width: 600px; margin: 0 auto; }
             .header { text-align: center; border-bottom: 2px solid #87CEEB; padding-bottom: 20px; margin-bottom: 20px; }
-            .logo { max-width: 200px; margin-bottom: 10px; }
             .company { font-size: 24px; font-weight: bold; color: #87CEEB; margin: 0; }
             .title { font-size: 18px; color: #666; margin-top: 5px; }
             .details { margin-bottom: 30px; line-height: 1.6; }
@@ -104,23 +92,19 @@ export function WorkConfirmations({ session }) {
             .signature-box { border-top: 1px dashed #ccc; padding-top: 20px; text-align: center; }
             .signature-img { max-height: 100px; margin-top: 10px; border: 1px solid #eee; }
             .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #999; }
-            @media print {
-               body { padding: 0; }
-               .ticket { border: none; }
-            }
+            @media print { body { padding: 0; } .ticket { border: none; } }
           </style>
         </head>
         <body>
           <div class="ticket">
             <div class="header">
-              <!-- Using absolute path or basic text if the logo doesn't load from a new window -->
               <h1 class="company">LIMPIEZA BALEAR</h1>
               <p class="title">CONFORME DE TRABAJO</p>
             </div>
             <div class="details">
               <p><span class="label">Fecha del servicio:</span> ${new Date(conforme.date).toLocaleDateString('es-ES')}</p>
               <p><span class="label">Cliente:</span> ${conforme.client_name}</p>
-              <p><span class="label">Empleado/a asignado/a:</span> ${session.user.user_metadata?.full_name || session.user.email}</p>
+              <p><span class="label">Empleado/a asignado/a:</span> ${empleado}</p>
               <br/>
               <p><span class="label">Descripción del trabajo realizado:</span></p>
               <p style="background: #f9f9f9; padding: 10px; border-radius: 4px; min-height: 80px;">
@@ -138,12 +122,7 @@ export function WorkConfirmations({ session }) {
             </div>
           </div>
           <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-                // Opcional: window.close() after printing
-              }, 500);
-            };
+            window.onload = function() { setTimeout(function() { window.print(); }, 500); };
           </script>
         </body>
       </html>
@@ -233,25 +212,23 @@ export function WorkConfirmations({ session }) {
                 {fetching ? (
                     <div className="loading-state">Cargando...</div>
                 ) : conformes.length === 0 ? (
-                    <div className="empty-state">No ha creado ningún conforme de trabajo aún.</div>
+                    <div className="empty-state">No hay registros aún.</div>
                 ) : (
                     <div className="list-container">
                         {conformes.map(conf => (
-                            <div key={conf.id} className="list-item">
+                            <div key={conf.id || Math.random()} className="list-item">
                                 <div className="list-item-header">
-                                    <div className="list-item-title-with-icon">
-                                        <span className="font-semibold text-sky-700">{conf.client_name}</span>
-                                    </div>
+                                    <span className="font-semibold text-sky-700">{conf.client_name}</span>
                                     <button
                                         onClick={() => handePrint(conf)}
-                                        className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100 hover:bg-sky-100 transition-colors"
+                                        className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100"
                                     >
                                         <Printer size={16} />
                                         Imprimir
                                     </button>
                                 </div>
-                                <div className="text-xs text-gray-500 mb-2">Fecha: {new Date(conf.date).toLocaleDateString('es-ES')}</div>
-                                <p className="list-item-desc text-sm line-clamp-2">{conf.description}</p>
+                                <div className="text-xs text-gray-400">Fecha: {new Date(conf.date).toLocaleDateString()}</div>
+                                <p className="text-sm mt-1 line-clamp-2">{conf.description}</p>
                             </div>
                         ))}
                     </div>

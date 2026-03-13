@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
 import { Fichaje } from './components/Fichaje';
 import { Vacations } from './components/Vacations';
@@ -16,39 +15,47 @@ function App() {
   const [activeTab, setActiveTab] = useState('fichaje');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      checkRole(session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      checkRole(session);
-    });
-
-    return () => subscription.unsubscribe();
+    const savedName = localStorage.getItem('employeeName');
+    if (savedName) {
+      const userSession = {
+        user: {
+          email: savedName,
+          user_metadata: { full_name: savedName }
+        }
+      };
+      setSession(userSession);
+      checkRole(savedName);
+    }
   }, []);
 
-  const checkRole = async (sess) => {
-    if (!sess) {
-      setIsAdmin(false);
-      return;
-    }
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', sess.user.id)
-      .single();
+  const checkRole = (email) => {
+    setIsAdmin(email === 'limpiezabalear@gmail.com');
+  };
 
-    setIsAdmin(data?.role === 'admin' || sess.user.email === 'limpiezabalear@gmail.com');
+  const loginUser = (name) => {
+    const userSession = {
+      user: {
+        email: name,
+        id: name, // Usamos el nombre como ID para compatibilidad
+        user_metadata: { full_name: name }
+      }
+    };
+    localStorage.setItem('employeeName', name);
+    setSession(userSession);
+    checkRole(name);
+  };
+
+  const logoutUser = () => {
+    localStorage.removeItem('employeeName');
+    localStorage.removeItem('openSession');
+    setSession(null);
+    setActiveTab('fichaje');
   };
 
   if (!session) {
     return (
       <div className="app-container">
-        <Auth />
+        <Auth onLogin={loginUser} />
       </div>
     );
   }
@@ -64,7 +71,7 @@ function App() {
         {activeTab === 'conformes' && <WorkConfirmations session={session} />}
         {activeTab === 'vacaciones' && <Vacations session={session} />}
         {activeTab === 'incidencias' && <Incidents session={session} />}
-        {activeTab === 'perfil' && <Profile session={session} />}
+        {activeTab === 'perfil' && <Profile session={session} onLogout={logoutUser} />}
         {activeTab === 'admin' && isAdmin && <AdminDashboard />}
       </main>
 

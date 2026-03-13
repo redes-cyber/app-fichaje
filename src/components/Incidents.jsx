@@ -1,39 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { AlertTriangle, Send, Loader2 } from 'lucide-react';
-
-const INCIDENT_TYPES = [
-    'Retraso',
-    'Ausencia por Enfermedad',
-    'Problema en Cliente',
-    'Falta de Material',
-    'Otro'
-];
+import { enviarAシート, obtenerRegistros } from '../lib/sheets';
+import { AlertTriangle, Send, Loader2, History } from 'lucide-react';
 
 export function Incidents({ session }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [incidents, setIncidents] = useState([]);
-    const [type, setType] = useState('');
+    const [type, setType] = useState('Retraso');
     const [description, setDescription] = useState('');
-    const [error, setError] = useState(null);
     const [msg, setMsg] = useState(null);
+
+    const empleado = session.user.email;
 
     useEffect(() => {
         fetchIncidents();
-    }, [session]);
+    }, [empleado]);
 
     const fetchIncidents = async () => {
         try {
             setFetching(true);
-            const { data, error } = await supabase
-                .from('incidencias')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .order('timestamp', { ascending: false });
-
-            if (error) throw error;
-            setIncidents(data || []);
+            const data = await obtenerRegistros(empleado);
+            setIncidents(data.filter(i => i.tipo === 'incidencia') || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -44,49 +31,37 @@ export function Incidents({ session }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError(null);
         setMsg(null);
 
-        if (!type || !description) {
-            setError('Por favor, selecciona un tipo y describe la incidencia.');
-            setLoading(false);
-            return;
-        }
-
         try {
-            const { error } = await supabase.from('incidencias').insert([
-                {
-                    user_id: session.user.id,
-                    type: type,
-                    description: description,
-                    timestamp: new Date().toISOString()
-                }
-            ]);
-
-            if (error) throw error;
+            const now = new Date();
+            await enviarAシート({
+                tipo: 'incidencia',
+                empleado,
+                incident_type: type,
+                description,
+                timestamp: now.toISOString()
+            });
 
             setMsg('Incidencia reportada correctamente.');
-            setType('');
             setDescription('');
             fetchIncidents();
         } catch (err) {
-            setError(err.message);
+            alert('Error: ' + err.message);
         } finally {
             setLoading(false);
             setTimeout(() => setMsg(null), 4000);
         }
     };
 
-    const formatDateTime = (iso) => {
-        return new Date(iso).toLocaleString('es-ES', {
-            dateStyle: 'medium',
-            timeStyle: 'short'
-        });
-    };
-
-    const getIncidentIcon = (type) => {
-        return <AlertTriangle size={18} className="incident-icon-small" />;
-    };
+    const incidentTypes = [
+        'Retraso',
+        'Enfermedad',
+        'Problema con Cliente',
+        'Falta de Material',
+        'Avería Maquinaria',
+        'Otro'
+    ];
 
     return (
         <div className="tab-pane">
@@ -97,7 +72,6 @@ export function Incidents({ session }) {
                 </h2>
 
                 <form onSubmit={handleSubmit} className="incident-form">
-                    {error && <div className="alert-error">{error}</div>}
                     {msg && <div className="alert-success">{msg}</div>}
 
                     <div className="input-group">
@@ -106,19 +80,15 @@ export function Incidents({ session }) {
                             value={type}
                             onChange={(e) => setType(e.target.value)}
                             className="input-field select-field"
-                            required
                         >
-                            <option value="" disabled>Selecciona el tipo</option>
-                            {INCIDENT_TYPES.map(t => (
-                                <option key={t} value={t}>{t}</option>
-                            ))}
+                            {incidentTypes.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
 
                     <div className="input-group">
-                        <label>Descripción detallada</label>
+                        <label>Descripción Detallada</label>
                         <textarea
-                            placeholder="Explica qué ha ocurrido con claridad..."
+                            placeholder="Explique lo ocurrido..."
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             className="input-field textarea-field"
@@ -139,25 +109,23 @@ export function Incidents({ session }) {
             </div>
 
             <div className="glass-panel mt-4">
-                <h3 className="subsection-title">Historial de Incidencias</h3>
+                <h3 className="subsection-title">
+                    <History size={18} />
+                    Historial de Incidencias
+                </h3>
                 {fetching ? (
                     <div className="loading-state">Cargando...</div>
                 ) : incidents.length === 0 ? (
-                    <div className="empty-state">No ha reportado incidencias.</div>
+                    <div className="empty-state">No hay incidencias reportadas.</div>
                 ) : (
                     <div className="list-container">
                         {incidents.map(inc => (
-                            <div key={inc.id} className="list-item">
-                                <div className="list-item-header">
-                                    <div className="list-item-title-with-icon">
-                                        {getIncidentIcon(inc.type)}
-                                        <span className="font-semibold">{inc.type}</span>
-                                    </div>
+                            <div key={inc.id || Math.random()} className="list-item">
+                                <div className="flex justify-between items-start">
+                                    <div className="font-semibold text-red-500">{inc.incident_type}</div>
+                                    <div className="text-xs text-gray-400">{new Date(inc.timestamp).toLocaleString()}</div>
                                 </div>
-                                <p className="list-item-desc">{inc.description}</p>
-                                <div className="list-item-meta">
-                                    Reportado: {formatDateTime(inc.timestamp)}
-                                </div>
+                                <p className="text-sm mt-1">{inc.description}</p>
                             </div>
                         ))}
                     </div>

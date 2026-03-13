@@ -1,32 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Calendar as CalendarIcon, Loader2, Send } from 'lucide-react';
+import { enviarAシート, obtenerRegistros } from '../lib/sheets';
+import { Calendar, Send, Loader2, History } from 'lucide-react';
 
 export function Vacations({ session }) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
-    const [vacations, setVacations] = useState([]);
+    const [requests, setRequests] = useState([]);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [comments, setComments] = useState('');
-    const [error, setError] = useState(null);
     const [msg, setMsg] = useState(null);
 
-    useEffect(() => {
-        fetchVacations();
-    }, [session]);
+    const empleado = session.user.email;
 
-    const fetchVacations = async () => {
+    useEffect(() => {
+        fetchRequests();
+    }, [empleado]);
+
+    const fetchRequests = async () => {
         try {
             setFetching(true);
-            const { data, error } = await supabase
-                .from('vacaciones')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setVacations(data || []);
+            // En una implementación real con Sheets, el historial vendría filtrado por tipo
+            const data = await obtenerRegistros(empleado);
+            setRequests(data.filter(r => r.tipo === 'vacaciones') || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -34,88 +30,60 @@ export function Vacations({ session }) {
         }
     };
 
-    const currentYear = new Date().getFullYear();
-    const minDate = `${currentYear}-01-01`;
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError(null);
         setMsg(null);
 
-        if (new Date(startDate) > new Date(endDate)) {
-            setError('La fecha de fin no puede ser anterior a la de inicio');
-            setLoading(false);
-            return;
-        }
-
         try {
-            const { error } = await supabase.from('vacaciones').insert([
-                {
-                    user_id: session.user.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    comments: comments || null,
-                }
-            ]);
+            await enviarAシート({
+                tipo: 'vacaciones',
+                empleado,
+                start_date: startDate,
+                end_date: endDate,
+                comments,
+                status: 'Pendiente'
+            });
 
-            if (error) throw error;
-
-            setMsg('Solicitud de vacaciones enviada correctamente.');
+            setMsg('Solicitud enviada correctamente a Google Sheets.');
             setStartDate('');
             setEndDate('');
             setComments('');
-            fetchVacations();
+            fetchRequests();
         } catch (err) {
-            setError(err.message);
+            alert('Error: ' + err.message);
         } finally {
             setLoading(false);
             setTimeout(() => setMsg(null), 4000);
         }
     };
 
-    const getStatusBadge = (status) => {
-        switch (status) {
-            case 'Aprobado': return <span className="status-badge status-aprobado">Aprobado</span>;
-            case 'Rechazado': return <span className="status-badge status-rechazado">Rechazado</span>;
-            default: return <span className="status-badge status-pendiente">Pendiente</span>;
-        }
-    };
-
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('es-ES');
-    };
-
     return (
         <div className="tab-pane">
             <div className="glass-panel">
                 <h2 className="section-title">
-                    <CalendarIcon className="section-icon" />
-                    Mis Vacaciones
+                    <Calendar className="section-icon" />
+                    Solicitar Vacaciones
                 </h2>
 
                 <form onSubmit={handleSubmit} className="vacation-form">
-                    {error && <div className="alert-error">{error}</div>}
                     {msg && <div className="alert-success">{msg}</div>}
 
-                    <div className="form-row">
+                    <div className="input-row">
                         <div className="input-group">
-                            <label>Fecha de Inicio</label>
+                            <label>Fecha Inicio</label>
                             <input
                                 type="date"
-                                min={minDate}
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
                                 className="input-field"
                                 required
                             />
                         </div>
-
                         <div className="input-group">
-                            <label>Fecha de Fin</label>
+                            <label>Fecha Fin</label>
                             <input
                                 type="date"
-                                min={startDate || minDate}
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
                                 className="input-field"
@@ -125,13 +93,13 @@ export function Vacations({ session }) {
                     </div>
 
                     <div className="input-group">
-                        <label>Comentarios (Opcional)</label>
+                        <label>Comentarios (opcional)</label>
                         <textarea
                             placeholder="Ej: Viaje familiar..."
                             value={comments}
                             onChange={(e) => setComments(e.target.value)}
                             className="input-field textarea-field"
-                            rows={3}
+                            rows={2}
                         />
                     </div>
 
@@ -147,24 +115,26 @@ export function Vacations({ session }) {
             </div>
 
             <div className="glass-panel mt-4">
-                <h3 className="subsection-title">Historial de Solicitudes</h3>
+                <h3 className="subsection-title">
+                    <History size={18} />
+                    Mis Solicitudes
+                </h3>
                 {fetching ? (
-                    <div className="loading-state">Cargando...</div>
-                ) : vacations.length === 0 ? (
-                    <div className="empty-state">No hay solicitudes de vacaciones.</div>
+                    <div className="loading-state">Cargando historial...</div>
+                ) : requests.length === 0 ? (
+                    <div className="empty-state">No hay solicitudes registradas aún.</div>
                 ) : (
                     <div className="list-container">
-                        {vacations.map(vac => (
-                            <div key={vac.id} className="list-item">
-                                <div className="list-item-header">
-                                    <div className="list-item-title">
-                                        {formatDate(vac.start_date)} - {formatDate(vac.end_date)}
+                        {requests.map(req => (
+                            <div key={req.id || Math.random()} className="list-item">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-semibold">{new Date(req.start_date).toLocaleDateString()} - {new Date(req.end_date).toLocaleDateString()}</div>
+                                        <div className="text-sm text-gray-500">{req.comments || 'Sin comentarios'}</div>
                                     </div>
-                                    {getStatusBadge(vac.status)}
-                                </div>
-                                {vac.comments && <p className="list-item-desc">{vac.comments}</p>}
-                                <div className="list-item-meta">
-                                    Solicitado: {new Date(vac.created_at).toLocaleDateString('es-ES')}
+                                    <span className={`status-badge status-${req.status.toLowerCase()}`}>
+                                        {req.status}
+                                    </span>
                                 </div>
                             </div>
                         ))}

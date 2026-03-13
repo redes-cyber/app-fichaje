@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { obtenerRegistros } from '../lib/sheets';
 import { Users, Clock, Calendar as CalendarIcon, AlertTriangle, FileSignature, Printer } from 'lucide-react';
 
 export function AdminDashboard() {
@@ -8,41 +8,24 @@ export function AdminDashboard() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchData(activeSegment);
+        fetchData();
     }, [activeSegment]);
 
-    const fetchData = async (segment) => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            if (segment === 'fichajes') {
-                const { data: fichas, error } = await supabase
-                    .from('fichajes')
-                    .select('*, profiles(full_name, email)')
-                    .order('timestamp', { ascending: false })
-                    .limit(100);
-                if (error) throw error;
-                setData(fichas || []);
-            } else if (segment === 'vacaciones') {
-                const { data: vac, error } = await supabase
-                    .from('vacaciones')
-                    .select('*, profiles(full_name, email)')
-                    .order('created_at', { ascending: false });
-                if (error) throw error;
-                setData(vac || []);
-            } else if (segment === 'incidencias') {
-                const { data: inc, error } = await supabase
-                    .from('incidencias')
-                    .select('*, profiles(full_name, email)')
-                    .order('timestamp', { ascending: false });
-                if (error) throw error;
-                setData(inc || []);
-            } else if (segment === 'conformes') {
-                const { data: conf, error } = await supabase
-                    .from('conformes')
-                    .select('*, profiles(full_name, email)')
-                    .order('created_at', { ascending: false });
-                if (error) throw error;
-                setData(conf || []);
+            // Para el modo Admin en Google Sheets, solemos pedir el historial completo
+            // asumiendo que el script de Apps Script devuelve todo si enviamos un acceso especial
+            const allData = await obtenerRegistros('ADMIN_ALL');
+
+            if (activeSegment === 'fichajes') {
+                setData(allData.filter(d => d.tipo === 'entrada' || d.tipo === 'salida' || d.accion) || []);
+            } else if (activeSegment === 'vacaciones') {
+                setData(allData.filter(d => d.tipo === 'vacaciones') || []);
+            } else if (activeSegment === 'incidencias') {
+                setData(allData.filter(d => d.tipo === 'incidencia') || []);
+            } else if (activeSegment === 'conformes') {
+                setData(allData.filter(d => d.tipo === 'conforme') || []);
             }
         } catch (err) {
             console.error(err);
@@ -51,25 +34,12 @@ export function AdminDashboard() {
         }
     };
 
-    const updateVacationStatus = async (id, newStatus) => {
-        try {
-            const { error } = await supabase
-                .from('vacaciones')
-                .update({ status: newStatus })
-                .eq('id', id);
-            if (error) throw error;
-            fetchData('vacaciones');
-        } catch (err) {
-            alert("Error al actualizar la solicitud");
-        }
-    };
-
-    const formatDateTime = (iso) => {
-        return new Date(iso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-    };
-
     const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('es-ES');
+        try {
+            return new Date(dateStr).toLocaleDateString('es-ES');
+        } catch (e) {
+            return dateStr;
+        }
     };
 
     const handePrint = (conforme) => {
@@ -99,13 +69,13 @@ export function AdminDashboard() {
                   <p class="title">CONFORME DE TRABAJO</p>
                 </div>
                 <div class="details">
-                  <p><span class="label">Fecha del servicio:</span> ${new Date(conforme.date).toLocaleDateString('es-ES')}</p>
+                  <p><span class="label">Fecha del servicio:</span> ${formatDate(conforme.date)}</p>
                   <p><span class="label">Cliente:</span> ${conforme.client_name}</p>
-                  <p><span class="label">Empleado/a asignado/a:</span> ${conforme.profiles?.full_name || conforme.profiles?.email}</p>
+                  <p><span class="label">Empleado/a asignado/a:</span> ${conforme.empleado}</p>
                   <br/>
                   <p><span class="label">Descripción del trabajo realizado:</span></p>
                   <p style="background: #f9f9f9; padding: 10px; border-radius: 4px; min-height: 80px;">
-                    ${conforme.description.replace(/\n/g, '<br/>')}
+                    ${(conforme.description || '').replace(/\n/g, '<br/>')}
                   </p>
                 </div>
                 <div class="signature-box">
@@ -115,7 +85,7 @@ export function AdminDashboard() {
                 </div>
                 <div class="footer">
                   <p>Documento digital firmado. Limpieza Balear Mallorca.</p>
-                  <p>${new Date(conforme.created_at).toLocaleString('es-ES')}</p>
+                  <p>${conforme.created_at ? new Date(conforme.created_at).toLocaleString() : ''}</p>
                 </div>
               </div>
               <script>
@@ -158,75 +128,62 @@ export function AdminDashboard() {
 
             <div className="glass-panel">
                 <h2 className="section-title">
-                    <Users className="section-icon" /> Dashboard Administrador
+                    <Users className="section-icon" /> Dashboard Administrador (Sheets)
                 </h2>
 
                 {loading ? (
-                    <div className="loading-state">Cargando...</div>
+                    <div className="loading-state">Cargando datos...</div>
                 ) : (
                     <div className="list-container">
                         {data.length === 0 ? (
-                            <div className="empty-state">No hay registros de {activeSegment}.</div>
+                            <div className="empty-state">No hay registros de {activeSegment} en Google Sheets.</div>
                         ) : null}
 
-                        {activeSegment === 'fichajes' && data.map(item => (
-                            <div key={item.id} className="list-item">
-                                <div className="font-semibold">{item.profiles?.full_name || item.profiles?.email}</div>
+                        {activeSegment === 'fichajes' && data.map((item, idx) => (
+                            <div key={idx} className="list-item">
+                                <div className="font-semibold">{item.empleado}</div>
                                 <div className="text-sm text-gray-600 flex justify-between">
-                                    <span>{item.action}</span>
-                                    <span>{formatDateTime(item.timestamp)}</span>
+                                    <span>{item.tipo === 'entrada' ? 'Entrada' : 'Salida'}</span>
+                                    <span>{item.fecha} {item.hora_entrada || item.hora_salida}</span>
                                 </div>
                             </div>
                         ))}
 
-                        {activeSegment === 'vacaciones' && data.map(item => (
-                            <div key={item.id} className="list-item">
+                        {activeSegment === 'vacaciones' && data.map((item, idx) => (
+                            <div key={idx} className="list-item">
                                 <div className="flex justify-between">
-                                    <div className="font-semibold">{item.profiles?.full_name || item.profiles?.email}</div>
-                                    <span className={`status-badge status-${item.status.toLowerCase()}`}>{item.status}</span>
+                                    <div className="font-semibold">{item.empleado}</div>
+                                    <span className={`status-badge status-${(item.status || 'pendiente').toLowerCase()}`}>{item.status}</span>
                                 </div>
                                 <div className="text-sm mt-1">{formatDate(item.start_date)} - {formatDate(item.end_date)}</div>
                                 {item.comments && <div className="text-sm italic mt-1 text-gray-500">"{item.comments}"</div>}
-
-                                {item.status === 'Pendiente' && (
-                                    <div className="flex gap-2 mt-2">
-                                        <button
-                                            className="btn btn-primary py-1 px-3 text-sm"
-                                            onClick={() => updateVacationStatus(item.id, 'Aprobado')}
-                                        >Aprobar</button>
-                                        <button
-                                            className="btn bg-[#FEE2E2] text-red-600 border border-red-200 py-1 px-3 text-sm"
-                                            onClick={() => updateVacationStatus(item.id, 'Rechazado')}
-                                        >Rechazar</button>
-                                    </div>
-                                )}
                             </div>
                         ))}
 
-                        {activeSegment === 'incidencias' && data.map(item => (
-                            <div key={item.id} className="list-item">
+                        {activeSegment === 'incidencias' && data.map((item, idx) => (
+                            <div key={idx} className="list-item">
                                 <div className="font-semibold flex justify-between">
-                                    <span>{item.profiles?.full_name || item.profiles?.email}</span>
-                                    <span className="text-xs font-normal text-gray-500">{formatDateTime(item.timestamp)}</span>
+                                    <span>{item.empleado}</span>
+                                    <span className="text-xs font-normal text-gray-400">{item.timestamp ? new Date(item.timestamp).toLocaleString() : ''}</span>
                                 </div>
-                                <div className="text-sm font-semibold text-red-500 mt-1">{item.type}</div>
+                                <div className="text-sm font-semibold text-red-500 mt-1">{item.incident_type}</div>
                                 <div className="text-sm text-gray-600 mt-1">{item.description}</div>
                             </div>
                         ))}
 
-                        {activeSegment === 'conformes' && data.map(item => (
-                            <div key={item.id} className="list-item">
+                        {activeSegment === 'conformes' && data.map((item, idx) => (
+                            <div key={idx} className="list-item">
                                 <div className="font-semibold flex justify-between items-center">
                                     <span className="text-sky-700">{item.client_name}</span>
                                     <button
                                         onClick={() => handePrint(item)}
-                                        className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100 hover:bg-sky-100 transition-colors"
+                                        className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100"
                                     >
                                         <Printer size={16} /> Imprimir
                                     </button>
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Fecha: {formatDate(item.date)} | Empleado: {item.profiles?.full_name || item.profiles?.email}
+                                <div className="text-xs text-gray-400">
+                                    Fecha: {formatDate(item.date)} | Empleado: {item.empleado}
                                 </div>
                                 <div className="text-sm text-gray-600 mt-2 line-clamp-2">{item.description}</div>
                             </div>
