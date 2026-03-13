@@ -7,7 +7,7 @@ export function HistoryLog({ sessions, onRefresh }) {
                 <h3>Historial de Jornadas</h3>
                 <p>Aún no hay jornadas registradas.</p>
                 {onRefresh && (
-                    <button className="btn-refresh" onClick={onRefresh}>↻ Actualizar</button>
+                    <button className="btn-text mt-4" onClick={onRefresh}>↻ Actualizar</button>
                 )}
             </div>
         );
@@ -24,10 +24,10 @@ export function HistoryLog({ sessions, onRefresh }) {
 
     return (
         <div className="history-container">
-            <div className="history-header">
-                <h3>Historial de Jornadas</h3>
+            <div className="history-header flex justify-between items-center mb-4 px-2">
+                <h3 className="font-semibold">Historial de Jornadas</h3>
                 {onRefresh && (
-                    <button className="btn-clear" onClick={onRefresh}>↻ Actualizar</button>
+                    <button className="btn-text" onClick={onRefresh}>↻ Actualizar</button>
                 )}
             </div>
 
@@ -35,7 +35,6 @@ export function HistoryLog({ sessions, onRefresh }) {
                 <table className="sessions-table">
                     <thead>
                         <tr>
-                            <th>Empleado</th>
                             <th>Fecha</th>
                             <th>Entrada</th>
                             <th>Salida</th>
@@ -45,7 +44,6 @@ export function HistoryLog({ sessions, onRefresh }) {
                     <tbody>
                         {sessions.map((s, i) => (
                             <tr key={i} className={s._open || !s.hora_salida ? 'row-open' : ''}>
-                                <td className="td-employee">👤 {s.empleado}</td>
                                 <td>{s.fecha || '—'}</td>
                                 <td className="td-entrada">{s.hora_entrada || '—'}</td>
                                 <td className="td-salida">
