@@ -1,64 +1,78 @@
 /**
- * CÓDIGO PARA GOOGLE APPS SCRIPT (v2 - Hojas Individuales)
+ * CÓDIGO PARA GOOGLE APPS SCRIPT (v3 - Resumen Admin y Emails)
  * 
  * Instrucciones:
- * 1. Abre tu Google Sheet.
+ * 1. Abre tu Google Sheet de Limpieza Balear.
  * 2. Ve a Extensiones > Apps Script.
- * 3. Borra todo y pega este código.
- * 4. Dale a 'Implementar' > 'Nueva implementación'.
- * 5. Tipo: 'Aplicación web', Acceso: 'Cualquier persona'.
+ * 3. Sustituye todo el código por este.
+ * 4. IMPORTANTE: Cambia el 'EMAIL_ADMIN' abajo por tu correo real.
+ * 5. Implementa de nuevo (Nueva versión).
  */
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
+const EMAIL_ADMIN = "limpiezabalear@gmail.com"; // <-- CAMBIA ESTO
 
 function doPost(e) {
     try {
         const data = JSON.parse(e.postData.contents);
         const tipo = data.tipo;
-        const empleado = data.empleado;
+        const empleado = data.empleado || data.email;
 
         if (!empleado) return resError("Falta el email del empleado");
 
-        // Buscamos o creamos la hoja del empleado
+        // 1. Gestión de Hoja Individual
         let sheet = SS.getSheetByName(empleado);
-
-        // Si es un registro nuevo o la hoja no existe, la creamos
         if (!sheet) {
             sheet = SS.insertSheet(empleado);
-            // Añadimos cabeceras
             sheet.appendRow(["TIPO", "FECHA", "HORA", "DESCRIPCIÓN/DETALLES", "OTRO/ESTADO", "LAT", "LNG", "FIRMA/EXTRA"]);
             sheet.getRange(1, 1, 1, 8).setBackground("#87CEEB").setFontWeight("bold");
         }
 
-        if (tipo === 'registro') {
-            return resSuccess("Usuario registrado/hoja confirmada");
+        if (tipo === 'registro') return resSuccess("Usuario registrado");
+
+        // 2. Gestión de Hoja Resumen (ADMIN)
+        let summarySheet = SS.getSheetByName("RESUMEN_GENERAL");
+        if (!summarySheet) {
+            summarySheet = SS.insertSheet("RESUMEN_GENERAL");
+            summarySheet.appendRow(["FECHA_REGISTRO", "EMAIL", "TIPO_EVENTO", "DETALLE", "TOTAL_HORAS", "ENLACE_HOJA"]);
+            summarySheet.getRange(1, 1, 1, 6).setBackground("#2F4F4F").setFontColor("white").setFontWeight("bold");
         }
 
-        // Lógica para guardar datos según el tipo
         const now = new Date();
+        const timestampStr = now.toLocaleString();
         const rows = [];
+        let summaryRow = [timestampStr, empleado, tipo.toUpperCase()];
 
         if (tipo === 'entrada') {
-            rows.push(['Entrada', data.fecha, data.hora_entrada, 'Fichaje de entrada', '', data.lat, data.lng, '']);
+            const row = ['Entrada', data.fecha, data.hora_entrada, 'Fichaje de entrada', '', data.lat, data.lng, ''];
+            sheet.appendRow(row);
+            summaryRow.push("Inició jornada", "", "Ver hoja: " + empleado);
         }
         else if (tipo === 'salida') {
-            rows.push(['Salida', '', data.hora_salida, 'Fichaje de salida', `Total: ${data.total_horas}`, data.lat, data.lng, '']);
+            const row = ['Salida', '', data.hora_salida, 'Fichaje de salida', `Total: ${data.total_horas}`, data.lat, data.lng, ''];
+            sheet.appendRow(row);
+            summaryRow.push("Terminó jornada", data.total_horas, "Ver hoja: " + empleado);
         }
         else if (tipo === 'vacaciones') {
-            rows.push(['Vacaciones', '', '', `Desde ${data.start_date} hasta ${data.end_date}`, data.status, '', '', data.comments]);
+            const row = ['Vacaciones', '', '', `Desde ${data.start_date} hasta ${data.end_date}`, data.status, '', '', data.comments];
+            sheet.appendRow(row);
+            summaryRow.push(`Solicitud Vacaciones: ${data.start_date}`, "", data.comments);
+            enviarEmailNotificacion("Nueva Solicitud de Vacaciones", `El empleado ${empleado} ha solicitado vacaciones del ${data.start_date} al ${data.end_date}.\nComentarios: ${data.comments}`);
         }
         else if (tipo === 'incidencia') {
-            rows.push(['Incidencia', '', '', data.incident_type, data.description, '', '', '']);
+            const row = ['Incidencia', '', '', data.incident_type, data.description, '', '', ''];
+            sheet.appendRow(row);
+            summaryRow.push(`INCIDENCIA: ${data.incident_type}`, "", data.description);
+            enviarEmailNotificacion("ALERTA: Nueva Incidencia Reportada", `El empleado ${empleado} ha reportado una incidencia de tipo: ${data.incident_type}.\nDescripción: ${data.description}`);
         }
         else if (tipo === 'conforme') {
-            rows.push(['Conforme', data.date, '', `Cliente: ${data.client_name} - ${data.description}`, 'Guardado', '', '', data.signature]);
+            const row = ['Conforme', data.date, '', `Cliente: ${data.client_name} - ${data.description}`, 'Guardado', '', '', data.signature];
+            sheet.appendRow(row);
+            summaryRow.push(`Conforme Trabajo: ${data.client_name}`, "", "Firma guardada en hoja");
         }
 
-        if (rows.length > 0) {
-            rows.forEach(row => sheet.appendRow(row));
-        }
-
-        return resSuccess("Datos guardados en hoja individual");
+        summarySheet.appendRow(summaryRow);
+        return resSuccess("Datos guardados y resumen actualizado");
 
     } catch (error) {
         return resError(error.toString());
@@ -70,45 +84,48 @@ function doGet(e) {
         const empleado = e.parameter.empleado;
         if (!empleado) return resError("Falta parámetro empleado");
 
-        // Si es ADMIN_ALL, devolvemos lo que tengamos (aquí podrías consolidar hojas)
+        // Modo Admin: Devuelve el resumen general
         if (empleado === 'ADMIN_ALL') {
-            return ContentService.createTextOutput(JSON.stringify([{ tipo: 'info', empleado: 'Admin', description: 'Vista global no implementada aún en modo individual' }])).setMimeType(ContentService.MimeType.JSON);
+            const summarySheet = SS.getSheetByName("RESUMEN_GENERAL");
+            if (!summarySheet) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+            const data = summarySheet.getDataRange().getValues();
+            data.shift(); // quitar headers
+            return ContentService.createTextOutput(JSON.stringify(data.map(r => ({
+                timestamp: r[0],
+                empleado: r[1],
+                tipo: r[2],
+                detalle: r[3],
+                total_horas: r[4]
+            })))).setMimeType(ContentService.MimeType.JSON);
         }
 
         const sheet = SS.getSheetByName(empleado);
         if (!sheet) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
 
         const data = sheet.getDataRange().getValues();
-        const headers = data.shift();
-
-        // Convertimos las filas en objetos para el frontend
-        const result = data.map(row => {
-            const type = (row[0] || '').toString().toLowerCase();
-            // Mapeo básico para que el frontend lo entienda
-            return {
-                tipo: type === 'entrada' || type === 'salida' ? 'fichaje' : type,
-                action: row[0],
-                empleado: empleado,
-                fecha: row[1] || '',
-                hora_entrada: type === 'entrada' ? row[2] : '',
-                hora_salida: type === 'salida' ? row[2] : '',
-                total_horas: type === 'salida' ? (row[4] || '').toString().replace('Total: ', '') : '',
-                description: row[3],
-                status: row[4],
-                timestamp: row[1] ? new Date(row[1]).toISOString() : new Date().toISOString(),
-                signature: row[7],
-                // Mapeos adicionales
-                start_date: type === 'vacaciones' ? (row[3] || '').toString().split(' ')[1] : '',
-                end_date: type === 'vacaciones' ? (row[3] || '').toString().split(' ')[3] : '',
-                incident_type: type === 'incidencia' ? row[3] : '',
-                client_name: type === 'conforme' ? (row[3] || '').toString().split(' - ')[0].replace('Cliente: ', '') : ''
-            };
-        });
+        data.shift();
+        const result = data.map(row => ({
+            action: row[0],
+            fecha: row[1],
+            hora: row[2],
+            description: row[3],
+            extra: row[4],
+            signature: row[7],
+            timestamp: row[1] ? new Date(row[1]).toISOString() : new Date().toISOString()
+        }));
 
         return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 
     } catch (error) {
         return resError(error.toString());
+    }
+}
+
+function enviarEmailNotificacion(asunto, mensaje) {
+    try {
+        MailApp.sendEmail(EMAIL_ADMIN, asunto, mensaje);
+    } catch (e) {
+        Logger.log("Error enviando email: " + e.toString());
     }
 }
 
