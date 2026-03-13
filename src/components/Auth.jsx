@@ -28,12 +28,12 @@ export function Auth({ onLogin }) {
 
                 <form onSubmit={handleLogin} className="auth-form">
                     <div className="input-group">
-                        <label>Nombre o Correo Electrónico</label>
+                        <label>Correo Electrónico</label>
                         <div className="input-with-icon">
                             <User className="input-icon" size={20} />
                             <input
-                                type="text"
-                                placeholder="Introduzca su nombre..."
+                                type="email"
+                                placeholder="usuario@limpiezabalearmallorca.es"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="input-field"

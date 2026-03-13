@@ -17,7 +17,7 @@ function doPost(e) {
         const tipo = data.tipo;
         const empleado = data.empleado;
 
-        if (!empleado) return resError("Falta el nombre del empleado");
+        if (!empleado) return resError("Falta el email del empleado");
 
         // Buscamos o creamos la hoja del empleado
         let sheet = SS.getSheetByName(empleado);
