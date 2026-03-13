@@ -1,5 +1,5 @@
 // URL del Google Apps Script - receptor de datos para Limpieza Balear
-export const SHEETS_URL = 'https://script.google.com/a/macros/limpiezabalearmallorca.es/s/AKfycbxMpr7T686XddzmLgoQFamMP-GxmhQs0NsoNpy8cXtjozq7OV5EmIJw6NnaZfD-5ZCfnA/exec';
+export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbx3eVYChPjXJuTN4uCHgQwSd2NBght9OztSjGKAlTMaKV3NbM8hjwoFLKAFepsEBGehkQ/exec';
 
 /**
  * Crea una hoja individual para el usuario si no existe
