@@ -19,13 +19,13 @@ export function AdminDashboard() {
             const allData = await obtenerRegistros('ADMIN_ALL');
 
             if (activeSegment === 'fichajes') {
-                setData(allData.filter(d => d.tipo === 'entrada' || d.tipo === 'salida' || d.accion) || []);
+                setData(allData.filter(d => ['entrada', 'salida'].includes((d.action || '').toLowerCase())) || []);
             } else if (activeSegment === 'vacaciones') {
-                setData(allData.filter(d => d.tipo === 'vacaciones') || []);
+                setData(allData.filter(d => (d.action || d.tipo || '').toLowerCase() === 'vacaciones') || []);
             } else if (activeSegment === 'incidencias') {
-                setData(allData.filter(d => d.tipo === 'incidencia') || []);
+                setData(allData.filter(d => (d.action || d.tipo || '').toLowerCase() === 'incidencia') || []);
             } else if (activeSegment === 'conformes') {
-                setData(allData.filter(d => d.tipo === 'conforme') || []);
+                setData(allData.filter(d => (d.action || d.tipo || '').toLowerCase() === 'conforme') || []);
             }
         } catch (err) {
             console.error(err);
@@ -42,7 +42,7 @@ export function AdminDashboard() {
         }
     };
 
-    const handePrint = (conforme) => {
+    const handlePrint = (conforme) => {
         const printWindow = window.open('', '_blank');
         printWindow.document.write(`
           <html>
@@ -176,7 +176,7 @@ export function AdminDashboard() {
                                 <div className="font-semibold flex justify-between items-center">
                                     <span className="text-sky-700">{item.client_name}</span>
                                     <button
-                                        onClick={() => handePrint(item)}
+                                        onClick={() => handlePrint(item)}
                                         className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100"
                                     >
                                         <Printer size={16} /> Imprimir

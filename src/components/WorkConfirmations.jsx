@@ -13,7 +13,7 @@ export function WorkConfirmations({ session }) {
     const [error, setError] = useState(null);
     const [msg, setMsg] = useState(null);
 
-    const sigCanvas = useRef({});
+    const sigCanvas = useRef(null);
     const empleado = session.user.email;
 
     useEffect(() => {
@@ -24,7 +24,8 @@ export function WorkConfirmations({ session }) {
         try {
             setFetching(true);
             const data = await obtenerRegistros(empleado);
-            setConformes(data.filter(c => c.tipo === 'conforme') || []);
+            // El script de GAS devuelve 'action' para el tipo de registro
+            setConformes(data.filter(c => (c.action || '').toLowerCase() === 'conforme') || []);
         } catch (err) {
             console.error(err);
         } finally {
@@ -42,7 +43,7 @@ export function WorkConfirmations({ session }) {
         setError(null);
         setMsg(null);
 
-        if (sigCanvas.current.isEmpty()) {
+        if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
             setError('Por favor, solicite al cliente que firme el conforme.');
             setLoading(false);
             return;
@@ -50,7 +51,7 @@ export function WorkConfirmations({ session }) {
 
         try {
             // Usamos toDataURL() para mayor velocidad
-            const signatureURL = sigCanvas.current.toDataURL('image/png');
+            const signatureURL = sigCanvas.current ? sigCanvas.current.getTrimmedCanvas().toDataURL('image/png') : '';
 
             await enviarAシート({
                 tipo: 'conforme',
@@ -75,7 +76,7 @@ export function WorkConfirmations({ session }) {
         }
     };
 
-    const handePrint = (conforme) => {
+    const handlePrint = (conforme) => {
         const printWindow = window.open('', '_blank');
         printWindow.document.write(`
       <html>
@@ -179,11 +180,14 @@ export function WorkConfirmations({ session }) {
 
                     <div className="input-group">
                         <label>Firma del Cliente</label>
-                        <div className="signature-container border border-sky-200 rounded-md bg-white overflow-hidden relative" style={{ touchAction: 'none' }}>
+                        <div className="signature-container">
                             <SignatureCanvas
                                 ref={sigCanvas}
                                 penColor="black"
-                                canvasProps={{ className: 'w-full h-40 signature-canvas' }}
+                                canvasProps={{ 
+                                    className: 'signature-canvas',
+                                    style: { width: '100%', height: '100%'}
+                                }}
                             />
                             <button
                                 type="button"
@@ -215,12 +219,12 @@ export function WorkConfirmations({ session }) {
                     <div className="empty-state">No hay registros aún.</div>
                 ) : (
                     <div className="list-container">
-                        {conformes.map(conf => (
-                            <div key={conf.id || Math.random()} className="list-item">
+                        {conformes.map((conf, idx) => (
+                            <div key={conf.id || idx} className="list-item">
                                 <div className="list-item-header">
                                     <span className="font-semibold text-sky-700">{conf.client_name}</span>
                                     <button
-                                        onClick={() => handePrint(conf)}
+                                        onClick={() => handlePrint(conf)}
                                         className="flex items-center gap-1 text-sm bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100"
                                     >
                                         <Printer size={16} />

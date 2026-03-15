@@ -77,7 +77,7 @@ export async function obtenerRegistros(empleado) {
         const res = await fetch(`${SHEETS_URL}?empleado=${encodeURIComponent(empleado)}`, { method: 'GET' });
         if (!res.ok) throw new Error('Error de red');
         const data = await res.json();
-        return data.reverse();
+        return Array.isArray(data) ? data.reverse() : [];
     } catch (err) {
         console.warn('No se pudo cargar el historial:', err.message);
         return [];
