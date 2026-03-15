@@ -74,7 +74,7 @@ export async function enviarAシート(datos) {
  */
 export async function obtenerRegistros(empleado) {
     try {
-        const res = await fetch(`${SHEETS_URL}?empleado=${encodeURIComponent(empleado)}`, { method: 'GET' });
+        const res = await fetch(`${SHEETS_URL}?empleado=${encodeURIComponent(empleado)}&t=${Date.now()}`, { method: 'GET' });
         if (!res.ok) throw new Error('Error de red');
         const data = await res.json();
         return Array.isArray(data) ? data.reverse() : [];

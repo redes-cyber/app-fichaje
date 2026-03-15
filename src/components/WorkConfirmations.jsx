@@ -50,8 +50,8 @@ export function WorkConfirmations({ session }) {
         }
 
         try {
-            // Usamos toDataURL() para mayor velocidad
-            const signatureURL = sigCanvas.current ? sigCanvas.current.getTrimmedCanvas().toDataURL('image/png') : '';
+            // Usamos JPEG con calidad reducida para que el tamaño sea manejable en Sheets
+            const signatureURL = sigCanvas.current ? sigCanvas.current.getTrimmedCanvas().toDataURL('image/jpeg', 0.6) : '';
 
             await enviarAシート({
                 tipo: 'conforme',
@@ -63,16 +63,22 @@ export function WorkConfirmations({ session }) {
                 created_at: new Date().toISOString()
             });
 
-            setMsg('Conforme de trabajo guardado correctamente en Google Sheets.');
+            setMsg('Conforme de trabajo guardado correctamente.');
             setClientName('');
             setDescription('');
-            clearSignature();
-            fetchConformes();
+            if (sigCanvas.current) sigCanvas.current.clear();
+            
+            // Damos un pequeño margen para que Google Sheets procese el registro
+            setTimeout(() => {
+                fetchConformes();
+                setLoading(false);
+            }, 1500);
         } catch (err) {
-            setError(err.message);
-        } finally {
+            console.error('Error al guardar conforme:', err);
+            setError('Error al conectar con el servidor: ' + err.message);
             setLoading(false);
-            setTimeout(() => setMsg(null), 4000);
+        } finally {
+            setTimeout(() => setMsg(null), 5000);
         }
     };
 
