@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { enviarAシート, obtenerRegistros } from '../lib/sheets';
+import { getItems, addItem } from '../lib/storage';
 import { AlertTriangle, Send, Loader2, History } from 'lucide-react';
 
 export function Incidents({ session }) {
@@ -16,11 +16,12 @@ export function Incidents({ session }) {
         fetchIncidents();
     }, [empleado]);
 
-    const fetchIncidents = async () => {
+    const fetchIncidents = () => {
         try {
             setFetching(true);
-            const data = await obtenerRegistros(empleado);
-            setIncidents(data.filter(i => i.tipo === 'incidencia') || []);
+            const data = getItems('incidencias', { empleado });
+            data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            setIncidents(data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -35,8 +36,7 @@ export function Incidents({ session }) {
 
         try {
             const now = new Date();
-            await enviarAシート({
-                tipo: 'incidencia',
+            addItem('incidencias', {
                 empleado,
                 incident_type: type,
                 description,
@@ -123,7 +123,7 @@ export function Incidents({ session }) {
                             <div key={inc.id || Math.random()} className="list-item">
                                 <div className="flex justify-between items-start">
                                     <div className="font-semibold text-red-500">{inc.incident_type}</div>
-                                    <div className="text-xs text-gray-400">{new Date(inc.timestamp).toLocaleString()}</div>
+                                    <div className="text-xs text-gray-400">{new Date(inc.timestamp || inc.created_at).toLocaleString()}</div>
                                 </div>
                                 <p className="text-sm mt-1">{inc.description}</p>
                             </div>

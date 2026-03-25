@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { enviarAシート, obtenerRegistros } from '../lib/sheets';
+import { getItems, addItem } from '../lib/storage';
 import { Calendar, Send, Loader2, History } from 'lucide-react';
 
 export function Vacations({ session }) {
@@ -17,12 +17,12 @@ export function Vacations({ session }) {
         fetchRequests();
     }, [empleado]);
 
-    const fetchRequests = async () => {
+    const fetchRequests = () => {
         try {
             setFetching(true);
-            // En una implementación real con Sheets, el historial vendría filtrado por tipo
-            const data = await obtenerRegistros(empleado);
-            setRequests(data.filter(r => r.tipo === 'vacaciones') || []);
+            const data = getItems('vacaciones', { empleado });
+            data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            setRequests(data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -36,8 +36,7 @@ export function Vacations({ session }) {
         setMsg(null);
 
         try {
-            await enviarAシート({
-                tipo: 'vacaciones',
+            addItem('vacaciones', {
                 empleado,
                 start_date: startDate,
                 end_date: endDate,
@@ -45,7 +44,7 @@ export function Vacations({ session }) {
                 status: 'Pendiente'
             });
 
-            setMsg('Solicitud enviada correctamente a Google Sheets.');
+            setMsg('Solicitud guardada localmente.');
             setStartDate('');
             setEndDate('');
             setComments('');

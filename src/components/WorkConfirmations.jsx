@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { enviarAシート, obtenerRegistros } from '../lib/sheets';
+import { getItems, addItem } from '../lib/storage';
 import { FileSignature, Send, Loader2, Printer, Eraser } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 
@@ -8,8 +8,10 @@ export function WorkConfirmations({ session }) {
     const [fetching, setFetching] = useState(true);
     const [conformes, setConformes] = useState([]);
     const [clientName, setClientName] = useState('');
+    const [employeeName, setEmployeeName] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [description, setDescription] = useState('');
+    const [observation, setObservation] = useState('');
     const [error, setError] = useState(null);
     const [msg, setMsg] = useState(null);
 
@@ -20,12 +22,12 @@ export function WorkConfirmations({ session }) {
         fetchConformes();
     }, [empleado]);
 
-    const fetchConformes = async () => {
+    const fetchConformes = () => {
         try {
             setFetching(true);
-            const data = await obtenerRegistros(empleado);
-            // El script de GAS devuelve 'action' para el tipo de registro
-            setConformes(data.filter(c => (c.action || '').toLowerCase() === 'conforme') || []);
+            const data = getItems('conformes', { empleado });
+            data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            setConformes(data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -50,34 +52,30 @@ export function WorkConfirmations({ session }) {
         }
 
         try {
-            // Usamos JPEG con calidad reducida para que el tamaño sea manejable en Sheets
-            const signatureURL = sigCanvas.current ? sigCanvas.current.getTrimmedCanvas().toDataURL('image/jpeg', 0.6) : '';
+            const signatureURL = sigCanvas.current ? sigCanvas.current.getCanvas().toDataURL('image/png') : '';
 
-            await enviarAシート({
-                tipo: 'conforme',
+            addItem('conformes', {
                 empleado,
+                employee_name: employeeName || empleado,
                 client_name: clientName,
                 date: date,
                 description: description,
-                signature: signatureURL,
-                created_at: new Date().toISOString()
+                observation: observation,
+                signature: signatureURL
             });
 
-            setMsg('Conforme de trabajo guardado correctamente.');
+            setMsg('Conforme de trabajo guardado localmente.');
             setClientName('');
             setDescription('');
+            setObservation('');
             if (sigCanvas.current) sigCanvas.current.clear();
             
-            // Damos un pequeño margen para que Google Sheets procese el registro
-            setTimeout(() => {
-                fetchConformes();
-                setLoading(false);
-            }, 1500);
+            fetchConformes();
         } catch (err) {
             console.error('Error al guardar conforme:', err);
-            setError('Error al conectar con el servidor: ' + err.message);
-            setLoading(false);
+            setError('Error al guardar el archivo: ' + err.message);
         } finally {
+            setLoading(false);
             setTimeout(() => setMsg(null), 5000);
         }
     };
@@ -102,21 +100,29 @@ export function WorkConfirmations({ session }) {
             @media print { body { padding: 0; } .ticket { border: none; } }
           </style>
         </head>
-        <body>
+            <body>
           <div class="ticket">
             <div class="header">
+              <img src="${window.location.origin}/logo.png" alt="Logo" style="max-height: 80px; margin-bottom: 10px;" onerror="this.style.display='none'"/>
               <h1 class="company">LIMPIEZA BALEAR</h1>
               <p class="title">CONFORME DE TRABAJO</p>
             </div>
             <div class="details">
               <p><span class="label">Fecha del servicio:</span> ${new Date(conforme.date).toLocaleDateString('es-ES')}</p>
               <p><span class="label">Cliente:</span> ${conforme.client_name}</p>
-              <p><span class="label">Empleado/a asignado/a:</span> ${empleado}</p>
+              <p><span class="label">Empleado/a asignado/a:</span> ${conforme.employee_name || conforme.empleado}</p>
               <br/>
               <p><span class="label">Descripción del trabajo realizado:</span></p>
               <p style="background: #f9f9f9; padding: 10px; border-radius: 4px; min-height: 80px;">
                 ${conforme.description.replace(/\n/g, '<br/>')}
               </p>
+              ${conforme.observation ? `
+              <br/>
+              <p><span class="label">Observaciones:</span></p>
+              <p style="background: #fdfdfd; padding: 10px; border-radius: 4px; border-left: 3px solid #ccc;">
+                ${conforme.observation.replace(/\n/g, '<br/>')}
+              </p>
+              ` : ''}
             </div>
             <div class="signature-box">
               <p class="label">Firma del cliente (Conforme)</p>
@@ -173,6 +179,18 @@ export function WorkConfirmations({ session }) {
                     </div>
 
                     <div className="input-group">
+                        <label>Nombre del Empleado</label>
+                        <input
+                            type="text"
+                            placeholder="Ingrese su nombre..."
+                            value={employeeName}
+                            onChange={(e) => setEmployeeName(e.target.value)}
+                            className="input-field"
+                            required
+                        />
+                    </div>
+
+                    <div className="input-group">
                         <label>Descripción del Trabajo</label>
                         <textarea
                             placeholder="Especifique los trabajos realizados..."
@@ -185,14 +203,26 @@ export function WorkConfirmations({ session }) {
                     </div>
 
                     <div className="input-group">
+                        <label>Observaciones (Opcional)</label>
+                        <textarea
+                            placeholder="Añada cualquier observación o comentario sobre el trabajo..."
+                            value={observation}
+                            onChange={(e) => setObservation(e.target.value)}
+                            className="input-field textarea-field"
+                            rows={2}
+                        />
+                    </div>
+
+                    <div className="input-group">
                         <label>Firma del Cliente</label>
-                        <div className="signature-container">
+                        <div className="signature-container bg-white border rounded">
                             <SignatureCanvas
                                 ref={sigCanvas}
                                 penColor="black"
+                                backgroundColor="white"
                                 canvasProps={{ 
                                     className: 'signature-canvas',
-                                    style: { width: '100%', height: '100%'}
+                                    style: { width: '100%', height: '100%', backgroundColor: 'white'}
                                 }}
                             />
                             <button

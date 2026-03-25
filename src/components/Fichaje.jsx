@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { registrarEntrada, registrarSalida, obtenerRegistros } from '../lib/sheets';
+import { getItems, addItem, updateItem } from '../lib/storage';
 import { ClockControls } from './ClockControls';
 import { HistoryLog } from './HistoryLog';
 import { useGeolocation } from '../hooks/useGeolocation';
@@ -17,20 +17,30 @@ export function Fichaje({ session }) {
 
     useEffect(() => {
         cargarHistorial();
-        // Cargar sesión activa desde localStorage
-        const savedSession = localStorage.getItem('openSession');
-        if (savedSession) {
-            try {
-                setActiveSession(JSON.parse(savedSession));
-            } catch (e) { }
-        }
+        verificarSesionActiva();
     }, [empleado]);
+
+    const verificarSesionActiva = async () => {
+        try {
+            const history = getItems('fichajes', { empleado, is_open: true });
+            if (history.length > 0) {
+                // Ordenar por más reciente
+                history.sort((a, b) => new Date(b.hora_entrada_iso) - new Date(a.hora_entrada_iso));
+                setActiveSession(history[0]);
+            } else {
+                setActiveSession(null);
+            }
+        } catch (e) {
+            console.warn("No active session error:", e.message);
+        }
+    };
 
     const cargarHistorial = async () => {
         try {
             setFetching(true);
-            const data = await obtenerRegistros(empleado);
-            setSessions(data || []);
+            const data = getItems('fichajes', { empleado });
+            data.sort((a, b) => new Date(b.hora_entrada_iso) - new Date(a.hora_entrada_iso));
+            setSessions(data.slice(0, 50));
         } catch (err) {
             console.error(err);
         } finally {
@@ -51,20 +61,17 @@ export function Fichaje({ session }) {
             const fechaStr = now.toLocaleDateString('es-ES');
             const horaStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-            const sessionData = {
+            const newSession = addItem('fichajes', {
                 empleado,
                 fecha: fechaStr,
                 hora_entrada: horaStr,
                 hora_entrada_iso: now.toISOString(),
-                lat: loc?.lat || null,
-                lng: loc?.lng || null
-            };
+                lat: loc?.lat?.toString() || null,
+                lng: loc?.lng?.toString() || null,
+                is_open: true
+            });
 
-            await registrarEntrada(sessionData);
-
-            setActiveSession(sessionData);
-            localStorage.setItem('openSession', JSON.stringify(sessionData));
-
+            setActiveSession(newSession);
             await cargarHistorial();
             mostrarEstado('✅ Entrada fichada correctamente');
         } catch (err) {
@@ -82,22 +89,20 @@ export function Fichaje({ session }) {
             const horaStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
             let totalHoras = '';
-            if (activeSession) {
+            if (activeSession && activeSession.hora_entrada_iso) {
                 const diffMs = now - new Date(activeSession.hora_entrada_iso);
                 totalHoras = (diffMs / 3600000).toFixed(2);
             }
 
-            await registrarSalida({
-                empleado,
+            updateItem('fichajes', activeSession.id, {
                 hora_salida: horaStr,
                 total_horas: totalHoras,
-                lat: loc?.lat || null,
-                lng: loc?.lng || null
+                lat_salida: loc?.lat?.toString() || null,
+                lng_salida: loc?.lng?.toString() || null,
+                is_open: false
             });
 
             setActiveSession(null);
-            localStorage.removeItem('openSession');
-
             await cargarHistorial();
             mostrarEstado(`🔴 Salida fichada. Total: ${totalHoras} hrs`);
         } catch (err) {

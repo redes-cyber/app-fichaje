@@ -7,6 +7,7 @@ import { Profile } from './components/Profile';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkConfirmations } from './components/WorkConfirmations';
 import { BottomNav } from './components/BottomNav';
+import { auth } from './lib/storage';
 import './index.css';
 
 function App() {
@@ -15,38 +16,26 @@ function App() {
   const [activeTab, setActiveTab] = useState('fichaje');
 
   useEffect(() => {
-    const savedName = localStorage.getItem('employeeName');
-    if (savedName) {
-      const userSession = {
-        user: {
-          email: savedName,
-          user_metadata: { full_name: savedName }
-        }
-      };
-      setSession(userSession);
-      checkRole(savedName);
-    }
+    auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) checkRole(session.user.email);
+    });
   }, []);
 
   const checkRole = (email) => {
     setIsAdmin(email === 'limpiezabalear@gmail.com');
   };
 
-  const loginUser = (name) => {
-    const userSession = {
-      user: {
-        email: name,
-        id: name, // Usamos el nombre como ID para compatibilidad
-        user_metadata: { full_name: name }
-      }
-    };
-    localStorage.setItem('employeeName', name);
-    setSession(userSession);
-    checkRole(name);
+  const loginUser = (email) => {
+    // Cuando el usuario haga login, seteamos la sesion sin refrescar pagina
+    auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        checkRole(email);
+    });
   };
 
-  const logoutUser = () => {
-    localStorage.removeItem('employeeName');
+  const logoutUser = async () => {
+    await auth.signOut();
     localStorage.removeItem('openSession');
     setSession(null);
     setActiveTab('fichaje');
