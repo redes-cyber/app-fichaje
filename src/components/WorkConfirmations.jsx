@@ -22,10 +22,10 @@ export function WorkConfirmations({ session }) {
         fetchConformes();
     }, [empleado]);
 
-    const fetchConformes = () => {
+    const fetchConformes = async () => {
         try {
             setFetching(true);
-            const data = getItems('conformes', { empleado });
+            const data = await getItems('conformes', { empleado });
             data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             setConformes(data);
         } catch (err) {
@@ -54,7 +54,7 @@ export function WorkConfirmations({ session }) {
         try {
             const signatureURL = sigCanvas.current ? sigCanvas.current.getCanvas().toDataURL('image/png') : '';
 
-            addItem('conformes', {
+            await addItem('conformes', {
                 empleado,
                 employee_name: employeeName || empleado,
                 client_name: clientName,

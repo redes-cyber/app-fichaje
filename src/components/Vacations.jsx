@@ -17,10 +17,10 @@ export function Vacations({ session }) {
         fetchRequests();
     }, [empleado]);
 
-    const fetchRequests = () => {
+    const fetchRequests = async () => {
         try {
             setFetching(true);
-            const data = getItems('vacaciones', { empleado });
+            const data = await getItems('vacaciones', { empleado });
             data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             setRequests(data);
         } catch (err) {
@@ -36,7 +36,7 @@ export function Vacations({ session }) {
         setMsg(null);
 
         try {
-            addItem('vacaciones', {
+            await addItem('vacaciones', {
                 empleado,
                 start_date: startDate,
                 end_date: endDate,

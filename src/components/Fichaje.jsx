@@ -22,7 +22,7 @@ export function Fichaje({ session }) {
 
     const verificarSesionActiva = async () => {
         try {
-            const history = getItems('fichajes', { empleado, is_open: true });
+            const history = await getItems('fichajes', { empleado, is_open: true });
             if (history.length > 0) {
                 // Ordenar por más reciente
                 history.sort((a, b) => new Date(b.hora_entrada_iso) - new Date(a.hora_entrada_iso));
@@ -38,7 +38,7 @@ export function Fichaje({ session }) {
     const cargarHistorial = async () => {
         try {
             setFetching(true);
-            const data = getItems('fichajes', { empleado });
+            const data = await getItems('fichajes', { empleado });
             data.sort((a, b) => new Date(b.hora_entrada_iso) - new Date(a.hora_entrada_iso));
             setSessions(data.slice(0, 50));
         } catch (err) {
@@ -61,7 +61,7 @@ export function Fichaje({ session }) {
             const fechaStr = now.toLocaleDateString('es-ES');
             const horaStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-            const newSession = addItem('fichajes', {
+            const newSession = await addItem('fichajes', {
                 empleado,
                 fecha: fechaStr,
                 hora_entrada: horaStr,
@@ -94,7 +94,7 @@ export function Fichaje({ session }) {
                 totalHoras = (diffMs / 3600000).toFixed(2);
             }
 
-            updateItem('fichajes', activeSession.id, {
+            await updateItem('fichajes', activeSession.id, {
                 hora_salida: horaStr,
                 total_horas: totalHoras,
                 lat_salida: loc?.lat?.toString() || null,

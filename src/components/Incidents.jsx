@@ -16,10 +16,10 @@ export function Incidents({ session }) {
         fetchIncidents();
     }, [empleado]);
 
-    const fetchIncidents = () => {
+    const fetchIncidents = async () => {
         try {
             setFetching(true);
-            const data = getItems('incidencias', { empleado });
+            const data = await getItems('incidencias', { empleado });
             data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             setIncidents(data);
         } catch (err) {
@@ -36,7 +36,7 @@ export function Incidents({ session }) {
 
         try {
             const now = new Date();
-            addItem('incidencias', {
+            await addItem('incidencias', {
                 empleado,
                 incident_type: type,
                 description,

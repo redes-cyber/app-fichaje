@@ -11,7 +11,7 @@ export function AdminDashboard() {
         fetchData();
     }, [activeSegment]);
 
-    const fetchData = () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
             let table = '';
@@ -20,7 +20,7 @@ export function AdminDashboard() {
             else if (activeSegment === 'incidencias') table = 'incidencias';
             else if (activeSegment === 'conformes') table = 'conformes';
 
-            const localData = getItems(table);
+            const localData = await getItems(table);
             localData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             setData(localData);
         } catch (err) {
@@ -30,8 +30,8 @@ export function AdminDashboard() {
         }
     };
 
-    const handleUpdateVacation = (id, newStatus) => {
-        updateItem('vacaciones', id, { status: newStatus });
+    const handleUpdateVacation = async (id, newStatus) => {
+        await updateItem('vacaciones', id, { status: newStatus });
         fetchData(); // Recargar datos para ver el cambio instantáneo
     };
 

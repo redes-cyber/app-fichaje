@@ -1,89 +1,56 @@
-// Simplified LocalStorage wrapper for offline first app
+import { supabase } from './supabase';
 
-export const getStorageData = (key) => {
-    try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : [];
-    } catch {
-        return [];
-    }
-};
-
-export const saveStorageData = (key, data) => {
-    localStorage.setItem(key, JSON.stringify(data));
-};
-
-export const addItem = (table, item) => {
-    const data = getStorageData(table);
-    const newItem = { 
-        ...item, 
-        id: crypto.randomUUID(), 
-        created_at: new Date().toISOString() 
-    };
-    saveStorageData(table, [newItem, ...data]);
-    return newItem;
-};
-
-export const updateItem = (table, id, updates) => {
-    const data = getStorageData(table);
-    const index = data.findIndex(i => i.id === id);
-    if (index !== -1) {
-        data[index] = { ...data[index], ...updates };
-        saveStorageData(table, data);
-        return data[index];
-    }
-    return null;
-};
-
-export const getItems = (table, filters = {}) => {
-    let data = getStorageData(table);
+export const getItems = async (table, filters = {}) => {
+    let query = supabase.from(table).select('*');
     
     // Apply filters
     Object.keys(filters).forEach(key => {
-        data = data.filter(item => item[key] === filters[key]);
+        if (filters[key] !== null && filters[key] !== undefined) {
+            query = query.eq(key, filters[key]);
+        }
     });
     
-    return data;
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
 };
 
-// --- AUTH FAKE ---
+export const addItem = async (table, item) => {
+    // We do not overwrite ID with our own crypto.randomUUID anymore
+    // Supabase will handle id normally or we can just send it as is, Assuming DB has auto-increment/UUID
+    const { data, error } = await supabase.from(table).insert([item]).select();
+    if (error) throw error;
+    return data ? data[0] : null;
+};
+
+export const updateItem = async (table, id, updates) => {
+    const { data, error } = await supabase.from(table).update(updates).eq('id', id).select();
+    if (error) throw error;
+    return data ? data[0] : null;
+};
+
 export const auth = {
     signUp: async ({ email, password }) => {
-        const users = getStorageData('users');
-        if (users.find(u => u.email === email)) {
-            throw new Error('El usuario ya existe. Inicie sesión.');
-        }
-        const newUser = { email, password, role: email === 'limpiezabalear@gmail.com' ? 'admin' : 'empleado' };
-        saveStorageData('users', [...users, newUser]);
-        
-        // Auto sign-in
-        localStorage.setItem('currentUser', JSON.stringify({ email: newUser.email }));
-        return { session: { user: { email: newUser.email } } };
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        // The mock before used role 'admin' for limpiezabalear@gmail.com, Supabase handles auth itself
+        return data;
     },
     
     signInWithPassword: async ({ email, password }) => {
-        const users = getStorageData('users');
-        const user = users.find(u => u.email === email);
-        if (!user) {
-            throw new Error('Usuario no encontrado.');
-        }
-        if (user.password !== password) {
-            throw new Error('Contraseña incorrecta.');
-        }
-        
-        localStorage.setItem('currentUser', JSON.stringify({ email: user.email }));
-        return { session: { user: { email: user.email } } };
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        return data; // { session, user }
     },
     
     signOut: async () => {
-        localStorage.removeItem('currentUser');
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
     },
 
     getSession: async () => {
-        const user = localStorage.getItem('currentUser');
-        if (user) {
-            return { data: { session: { user: JSON.parse(user) } } };
-        }
-        return { data: { session: null } };
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        return { data: { session: data.session } };
     }
 };
